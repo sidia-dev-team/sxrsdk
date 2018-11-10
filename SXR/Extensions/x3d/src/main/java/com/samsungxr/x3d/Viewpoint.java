@@ -46,6 +46,7 @@ public class Viewpoint
   };
   private boolean retainUserOffsets = false;
   private boolean isBound = false;
+  private boolean mUseCamera = false; // true for Augmented Reality
   SXRNode parent = null;
 
   public Viewpoint()
@@ -54,7 +55,7 @@ public class Viewpoint
 
   public Viewpoint(float[] centerOfRotation, String description,
       float fieldOfView, boolean jump, String name, float[] orientation,
-      float[] position, boolean retainUserOffsets, SXRNode parent)
+      float[] position, boolean useCamera, boolean retainUserOffsets, SXRNode parent)
   {
     this.description = description;
     this.fieldOfView = fieldOfView;
@@ -68,6 +69,7 @@ public class Viewpoint
       this.position[i] = position[i];
     }
     this.orientation[3] = orientation[3];
+    this.mUseCamera = useCamera;
     this.parent = parent;
   }
 
@@ -104,6 +106,11 @@ public class Viewpoint
   public float[] getPosition()
   {
     return this.position;
+  }
+
+  public boolean getCamera()
+  {
+    return this.mUseCamera;
   }
 
   public boolean getRetainUserOffsets()

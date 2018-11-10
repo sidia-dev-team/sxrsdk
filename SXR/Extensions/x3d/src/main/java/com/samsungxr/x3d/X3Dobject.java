@@ -33,6 +33,7 @@ import com.samsungxr.io.SXRControllerType;
 import com.samsungxr.io.SXRInputManager;
 import com.samsungxr.nodes.SXRVideoNode;
 import com.samsungxr.nodes.SXRVideoNodePlayer;
+import com.samsungxr.x3d.ar.ARMain;
 import com.samsungxr.utility.Log;
 
 import java.io.FileNotFoundException;
@@ -160,6 +161,7 @@ public class X3Dobject {
     public static final String TRANSFORM_SCALE_ = "_Transform_Scale_";
     private static final String TRANSFORM_SCALE_ORIENTATION_ = "_Transform_Scale_Orientation_";
     private static final String TRANSFORM_NEGATIVE_SCALE_ORIENTATION_ = "_Transform_Neg_Scale_Orientation_";
+    private final String VIEWPOINT_AR_CAMERA = "camera";
 
     // Append this incremented value to SXRScene names to insure unique
     // SXRNodes
@@ -292,7 +294,7 @@ public class X3Dobject {
     private boolean blockLighting = false;
     private boolean blockTexturing = false;
 
-
+    public ARMain arMain = null;
 
 
     // The Text_Font Params class and Reset() function handle
@@ -2327,6 +2329,7 @@ public class X3Dobject {
                             {
                                     0, 0, 10
                             };
+                    boolean camera = false;
                     boolean retainUserOffsets = false;
 
                     attributeValue = attributes.getValue("DEF");
@@ -2369,20 +2372,33 @@ public class X3Dobject {
                         retainUserOffsets = utility.parseBooleanString(attributeValue);
                         Log.e(TAG, "Viewpoint retainUserOffsets attribute not implemented. ");
                     }
-                    // Add viewpoint to the list.
-                    // Since viewpoints can be under a Transform, save the parent.
-                    Viewpoint viewpoint = new Viewpoint(centerOfRotation, description,
-                            fieldOfView, jump, name, orientation, position, retainUserOffsets,
-                            currentNode);
-                    viewpoints.add(viewpoint);
-
-                    if ( !name.equals("") ) {
-                        DefinedItem definedItem = new DefinedItem(name);
-                        definedItem.setViewpoint(viewpoint);
-                        mDefinedItems.add(definedItem); // Array list of DEFined items
+                    if (attributes.getValue(VIEWPOINT_AR_CAMERA) != null) {
+                        camera = utility.parseBooleanString( attributes.getValue(VIEWPOINT_AR_CAMERA) );
+                        Log.e(TAG, "Viewpoint camera boolean supporting AR not implemented. ");
                     }
+                    if (!camera) {
+                        // Add viewpoint to the list.
+                        // Since viewpoints can be under a Transform, save the parent.
+                        Viewpoint viewpoint = new Viewpoint(centerOfRotation, description,
+                                fieldOfView, jump, name, orientation, position, camera,
+                                retainUserOffsets, currentNode);
+                        viewpoints.add(viewpoint);
 
-
+                        if (!name.equals("")) {
+                            DefinedItem definedItem = new DefinedItem(name);
+                            definedItem.setViewpoint(viewpoint);
+                            mDefinedItems.add(definedItem); // Array list of DEFined items
+                        }
+                    }
+                    else {
+                        try {
+                            Log.e("X3DDBG", "<Viewpoint> make call to ARMain.");
+                            arMain = new ARMain(gvrContext, protos, shaderSettings, x3DShader);
+                            Log.e("X3DDBG", "<Viewpoint> return from call to ARMain.");
+                        } catch (Exception e) {
+                            Log.e("X3DDBG", "call to ARMain exception: " + e);
+                        }
+                    }
                 } // end <Viewpoint> node
 
 
@@ -3222,7 +3238,7 @@ public class X3Dobject {
                     attributeValue = attributes.getValue("transparency");
                     if (attributeValue != null) {
                         transparency = utility.parseSingleFloatString(attributeValue, true, false);
-                        Log.e(TAG, "Background transparency attribute not implemented. ");
+                        Log.e("X3DDBG", "Background transparency attribute not implemented. ");
                     }
                     attributeValue = attributes.getValue("groundAngle");
                     if (attributeValue != null) {
@@ -4222,46 +4238,53 @@ public class X3Dobject {
                 // we now have all the ROUTES, and set up either the default or an actual
                 // camera based on a <Viewpoint> in the scene.
 
-                // First, set up the camera / Viewpoint
-                // The camera rig is indirectly attached to the root
+                if (arMain == null) {
+                    // First, set up the camera / Viewpoint
+                    // The camera rig is indirectly attached to the root
 
-                if (cameraRigAtRoot != null) {
+                    if (cameraRigAtRoot != null) {
 
-                    SXRCameraRig mainCameraRig = gvrContext.getMainScene().getMainCameraRig();
+                        SXRCameraRig mainCameraRig = gvrContext.getMainScene().getMainCameraRig();
 
-                    float[] cameraPosition = {0, 0, 10}; // X3D's default camera position
-                    if ( !viewpoints.isEmpty()) {
+                        float[] cameraPosition = {0, 0, 10}; // X3D's default camera position
+                        if (!viewpoints.isEmpty()) {
 
-                        // X3D file contained a <Viewpoint> node.
-                        // Per X3D spec., when there is 1 or more Viewpoints in the
-                        // X3D file, init with the first viewpoint in the X3D file
-                        Viewpoint viewpoint = viewpoints.firstElement();
-                        viewpoint.setIsBound(true);
-                        cameraPosition = viewpoint.getPosition();
-                    } // <Viewpoint> node existed
-                    mainCameraRig.getTransform().setPosition(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
-                    SXRCursorController gazeController = null;
-                    SXRInputManager inputManager = gvrContext.getInputManager();
+                            // X3D file contained a <Viewpoint> node.
+                            // Per X3D spec., when there is 1 or more Viewpoints in the
+                            // X3D file, init with the first viewpoint in the X3D file
+                            Viewpoint viewpoint = viewpoints.firstElement();
+                            viewpoint.setIsBound(true);
+                            cameraPosition = viewpoint.getPosition();
+                        } // <Viewpoint> node existed
+                        mainCameraRig.getTransform().setPosition(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+                        SXRCursorController gazeController = null;
+                        SXRInputManager inputManager = gvrContext.getInputManager();
 
-                    // Set up cursor based on camera position
-                    List<SXRCursorController> controllerList = inputManager.getCursorControllers();
+                        // Set up cursor based on camera position
+                        List<SXRCursorController> controllerList = inputManager.getCursorControllers();
 
-                    for(SXRCursorController controller: controllerList){
-                        if(controller.getControllerType() == SXRControllerType.GAZE);
-                        {
-                            gazeController = controller;
-                            gazeController.setCursorControl(SXRCursorController.CursorControl.PROJECT_CURSOR_ON_SURFACE);
-                            break;
+                        for (SXRCursorController controller : controllerList) {
+                            if (controller.getControllerType() == SXRControllerType.GAZE) ;
+                            {
+                                gazeController = controller;
+                                gazeController.setCursorControl(SXRCursorController.CursorControl.PROJECT_CURSOR_ON_SURFACE);
+                                break;
+                            }
                         }
-                    }
-                    if ( gazeController != null) {
-                        gazeController.setOrigin(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
-                    }
-                } // end setting based on new camera rig
+                        if (gazeController != null) {
+                            gazeController.setOrigin(cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+                        }
+                    } // end setting based on new camera rig
+                } // not AR
+                else {
+                    // an AR scene so set the camera to (0,0,0)
+                    Log.e("X3DDBG", "X3DObject, arMain != null; set camera to (0,0,0)");
+                    gvrContext.getMainScene().getMainCameraRig().getTransform().setPosition(0, 0, 0);
+                }
 
             } // end </scene>
             else if (qName.equalsIgnoreCase("x3d")) {
-                ;
+                Log.e("X3DDBG", "X3DObject, </X3D>");
             } // end </x3d>
             else {
                 Log.e(TAG, "Not parsing ending '" + qName + "' tag.");
@@ -4361,16 +4384,29 @@ public class X3Dobject {
                     }
                 }
             }
-
-            try {
-                animationInteractivityManager.initAnimationsAndInteractivity();
-                // Need to build a JavaScript function that constructs the
-                // X3D data type objects used with a SCRIPT.
-                // Scripts can also have an initialize() method.
-                animationInteractivityManager.InitializeScript();
+            if (arMain == null) {
+                // Not an AR scene
+                try {
+                    animationInteractivityManager.initAnimationsAndInteractivity();
+                    // Need to build a JavaScript function that constructs the
+                    // X3D data type objects used with a SCRIPT.
+                    // Scripts can also have an initialize() method.
+                    animationInteractivityManager.InitializeScript();
+                } catch (Exception exception) {
+                    Log.e(TAG, "Error initialing X3D <ROUTE> or <Script> node related to Animation or Interactivity.");
+                }
             }
-            catch (Exception exception) {
-                Log.e(TAG, "Error initialing X3D <ROUTE> or <Script> node related to Animation or Interactivity.");
+            else {
+                // an Augemented Reality scene
+                try {
+                    Log.e("X3DDBG", "X3DObject, Call to arMain.resume()");
+                    arMain.resume();
+                    Log.e("X3DDBG", "X3DObject, arMain.resume() RETURN");
+                }
+                catch (Exception exception) {
+                    Log.e("X3DDBG", "Error invoking AR: " + exception);
+                    Log.e(TAG, "Error invoking AR: " + exception);
+                }
             }
 
         } catch (Exception exception) {
